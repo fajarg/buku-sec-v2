@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Informasi Buku</title>
+</head>
+
+<body>
+    <h1>Informasi Buku</h1>
+    <input type="text" placeholder="secret" id="secret"><br><br>
+    <input type="text" id="plaintextInput">
+    <button id="encrypt">gas en</button><br><br>
+
+    <input type="text" placeholder="salt" id="salt">
+    <input type="text" placeholder="iv" id="iv">
+    <input type="text" placeholder="ciphertext" id="ciphertext">
+    <button id="decrypt">gas dec</button>
+
+    <script>
+        async function getKey(keyMaterial, salt) {
+            const importedKeyMaterial = await window.crypto.subtle.importKey(
+                "raw",
+                keyMaterial,
+                { name: "PBKDF2" },
+                false,
+                ["deriveBits", "deriveKey"]
+            );
+
+            return await window.crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 10000, // Tambahkan properti iterations di sini
+                    hash: { name: "SHA-256" },
+                },
+                importedKeyMaterial,
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        async function encrypt(secret, plainText) {
+            const message = {
+                salt: window.crypto.getRandomValues(new Uint8Array(16)),
+                iv: window.crypto.getRandomValues(new Uint8Array(12)),
+            };
+
+            const encoder = new TextEncoder();
+            const keyMaterial = encoder.encode(secret);
+
+            const key = await getKey(keyMaterial, message.salt);
+
+            const encodedPlainText = encoder.encode(plainText);
+
+            message.ciphertext = await window.crypto.subtle.encrypt(
+                {
+                    name: "AES-GCM",
+                    iv: message.iv,
+                },
+                key,
+                encodedPlainText,
+            );
+
+            return {
+                salt: byteArrayToHexString(message.salt),
+                iv: byteArrayToHexString(message.iv),
+                ciphertext: byteArrayToHexString(new Uint8Array(message.ciphertext)),
+            };
+        }
+
+        async function decrypt(secret, message) {
+            const encoder = new TextEncoder();
+            const keyMaterial = encoder.encode(secret);
+
+            const key = await getKey(keyMaterial, hexStringToByteArray(message.salt));
+
+            const decryptedData = await window.crypto.subtle.decrypt(
+                {
+                    name: "AES-GCM",
+                    iv: hexStringToByteArray(message.iv),
+                },
+                key,
+                hexStringToByteArray(message.ciphertext),
+            );
+
+            return new TextDecoder().decode(decryptedData);
+        }
+
+        // Convert Uint8Array to hexadecimal string
+        function byteArrayToHexString(byteArray) {
+            return Array.from(byteArray, (byte) => {
+                return ("0" + (byte & 0xff).toString(16)).slice(-2);
+            }).join("");
+        }
+
+        // Convert hexadecimal string to Uint8Array
+        function hexStringToByteArray(hexString) {
+            const bytes = [];
+            for (let i = 0; i < hexString.length; i += 2) {
+                bytes.push(parseInt(hexString.substr(i, 2), 16));
+            }
+            return new Uint8Array(bytes);
+        }
+
+
+        // action
+        const encrypting = document.getElementById("encrypt");
+        const decrypting = document.getElementById("decrypt");
+
+        // running
+        encrypting.addEventListener("click", async function () {
+            const secret = document.getElementById("secret").value;
+            const plainText = document.getElementById("plaintextInput").value;
+
+            // Encrypt
+            const encryptedMessage = await encrypt(secret, plainText);
+            console.log("Encrypted message:", encryptedMessage);
+        });
+
+        decrypting.addEventListener("click", async function () {
+            const secret = document.getElementById("secret").value;
+            const salt = document.getElementById("salt").value;
+            const iv = document.getElementById("iv").value;
+            const ciphertext = document.getElementById("ciphertext").value;
+
+            const encryptedMessage = {
+                salt: salt,
+                iv: iv,
+                ciphertext: ciphertext
+            }
+            console.log(encryptedMessage)
+
+            // Decrypt ciphertext
+            const decryptedText = await decrypt(secret, encryptedMessage);
+            console.log("Decrypted text:", decryptedText);
+        });
+    </script>
+</body>
+
+</html>
